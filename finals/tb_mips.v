@@ -22,7 +22,7 @@ clock = 0;
 #10 reset = 1;
 forever #10 clock = !clock;
 end
-always@(posedge clock)
+always@(*)
 begin
 	case(PC_val[7:4])
 		4'b0000: HEX5 = Seg0;
