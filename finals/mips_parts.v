@@ -1,28 +1,21 @@
 //
-module mips_control(clk, reset, PC_val, AR_val, RD1, AD2, RD2, ID, controls,AC);
+module mips_control(clk, reset, PC_val, WD_val);
 input clk;
 input reset;
 output [31:0] PC_val;
-output [31:0] AR_val, RD1, AD2, RD2, ID;
-output [8:0] controls; output [2:0] AC;
+output [31:0] WD_val;
 
 wire [31:0] PC, instr, readData1, readData2, alu_data2, alu_result, readData, instr_imm, writeData, newpc;
 wire regWrite, zero, regDst, aluSrc, branch, memWrite, memRead, jump;
 wire [1:0] aluop;
-wire [2:0] alucontrol;
+wire [3:0] alucontrol;
 wire [4:0] writeReg;
-assign AR_val = alu_result;
 assign PC_val = PC;
-
-assign RD1 = readData1;
-assign AD2=alu_data2;assign RD2 = readData2; assign ID = instr;
-assign controls = {regWrite, regDst, aluSrc, branch, memWrite, memRead, jump, aluop};
-assign AC = alucontrol;
-
+assign WD_val = writeData;
 instruction_mem	im(PC, instr);
 registers		rm(clk, regWrite, instr[25:21], instr[20:16], writeReg, writeData, readData1, readData2);
-alu_mips		am(readData1, alu_data2, alucontrol, alu_result, zero);
 alu_control		ac(instr[5:0], aluop, alucontrol);
+alu_mips		am(readData1, alu_data2, instr[10:6], alucontrol, alu_result, zero);
 main_control	ct(instr[31:26], regWrite, regDst, aluSrc, branch, memWrite, memRead, jump, aluop);
 data_mem		dm(memRead, memWrite, alu_result, readData2, readData);
 sign_ex			se(instr[15:0], instr_imm);
@@ -36,28 +29,29 @@ endmodule
 module alu_control(func, aluop, alucontrol);
 input [5:0] func;
 input [1:0] aluop;
-output reg [2:0] alucontrol;
+output reg [3:0] alucontrol;
 
 always @(aluop, func)
 begin
 	case(aluop)
-		2'b00: alucontrol <= 3'b100;  // add
-		2'b01: alucontrol <= 3'b110;  // sub
-		2'b11: alucontrol <= 3'b001;	// or
+		2'b00: alucontrol <= 4'b0010;  // add
+		2'b01: alucontrol <= 4'b0110;  // sub
+		2'b11: alucontrol <= 4'b0001;	// or
 		2'b10: case(func)          // RTYPE
-			6'b100000: alucontrol <= 3'b100; // add
-			6'b100010: alucontrol <= 3'b110; // sub
-			6'b100100: alucontrol <= 3'b000; // and
-			6'b100101: alucontrol <= 3'b001; // or
-			6'b101011: alucontrol <= 3'b111; // sltu
-			default:   alucontrol <= 3'bxxx; // ???
+			6'b100000: alucontrol <= 4'b0010; // add
+			6'b100010: alucontrol <= 4'b0110; // sub
+			6'b100100: alucontrol <= 4'b0000; // and
+			6'b100101: alucontrol <= 4'b0001; // or
+			6'b000000: alucontrol <= 4'b1010; // sll
+			default:   alucontrol <= 4'bxxxx; // ???
 		endcase
 	endcase
 end
 endmodule
 //
-module alu_mips(a, b, control, outalu, zero);
+module alu_mips(a, b, shamt, control, outalu, zero);
 input [31:0] a, b;
+input [4:0] shamt;
 input [3:0]	control;
 output reg [31:0] outalu;
 output zero;
@@ -67,12 +61,13 @@ assign zero = (outalu==0?1:0);
 always@(control, a, b)
 begin
 	case(control)
-		0: outalu=a&b;
-		1: outalu= a|b;
-		4: outalu=a+b;
-		6: outalu=a-b;
-		7: outalu=a<b?1:0;
-		12: outalu=~(a|b);
+		4'b0010: outalu = a + b;
+		4'b0110: outalu = a - b;
+		4'b0000: outalu = a & b;
+		4'b0001: outalu = a | b;
+		4'b1001: outalu = a ^ b;
+		4'b1010: outalu = b << shamt;
+		4'b1100: outalu = b >> shamt;
 		default : outalu = 0;
 	endcase
 end
@@ -105,7 +100,7 @@ module data_mem (memRead, memWrite,address, write_data, read_data);
         end
     end
 
- assign read_data = (memRead == 1'b1)?register_memory[address]:32'b0;
+	assign read_data = (memRead == 1'b1)?register_memory[address]:32'b0;
 
 endmodule
 //
@@ -130,19 +125,19 @@ begin
 	mem[10] = 8'b00000000 ;
 	mem[11] = 8'b00110101 ;
 	mem[12] = 8'b00000000 ;
-	mem[13] = 8'b00010001 ;
-	mem[14] = 8'b01000000 ;
+	mem[13] = 8'b00001000 ;
+	mem[14] = 8'b10001000 ;
 	mem[15] = 8'b10000000 ;
 	mem[16] = 8'b00000010 ;
 	mem[17] = 8'b00101001 ;
 	mem[18] = 8'b10010000 ;
 	mem[19] = 8'b00100000 ;
 	mem[20] = 8'b00010001 ;
-	mem[21] = 8'b01001011 ;
-	mem[22] = 8'b00000000 ;
-	mem[23] = 8'b00000011 ;
-	mem[24] = 8'b10001101 ;
-	mem[25] = 8'b00110010 ;
+	mem[21] = 8'b01010010 ;
+	mem[22] = 8'b11111111 ;
+	mem[23] = 8'b11111101 ;
+	mem[24] = 8'b10001110 ;
+	mem[25] = 8'b01001011 ;
 	mem[26] = 8'b00000000 ;
 	mem[27] = 8'b00000000 ;
 	mem[28] = 8'b00100001 ;
@@ -152,7 +147,7 @@ begin
 	mem[32] = 8'b00001000 ;
 	mem[33] = 8'b00000000 ;
 	mem[34] = 8'b00000000 ;
-	mem[35] = 8'b00000100 ;
+	mem[35] = 8'b00001001 ;
 	mem[36] = 8'b00000000 ;
 	mem[37] = 8'b00000001 ;
 	mem[38] = 8'b00011110 ;
@@ -237,11 +232,11 @@ begin
 	case(op)
 		6'b000000 : controls = 9'b110000010;	// R-type
 		6'b100011 : controls = 9'b101001000;	// lw
-		6'b101011 : controls = 9'b001010000;	// sw
-		6'b000100 : controls = 9'b000100001;	// beq
+		6'b101011 : controls = 9'b0x101x000;	// sw
+		6'b000100 : controls = 9'b0x010x001;	// beq
 		6'b001000 : controls = 9'b101000000;	// addi
 		6'b001101 : controls = 9'b101000011;	// ori
-		6'b000010 : controls = 9'b000000001;	// j
+		6'b000010 : controls = 9'b0xx0001xx;	// j
 		default : controls = 9'bxxxxxxxxx;		// ???
 	endcase
 end
@@ -313,179 +308,54 @@ mux_32b			mx1(pc4,a3,bnz, m1);
 mux_32b			mx2(m1, jump_address, jump, newpc);
 endmodule
 //
-module regfile(input             clk, 
-               input             we, 
-               input      [4:0]  ra1, ra2, wa, 
-               input      [31:0] wd, 
-               output reg [31:0] rd1, rd2);
-
-	reg [31:0] R1;
-	reg [31:0] R2;
-	reg [31:0] R3;
-	reg [31:0] R4;
-	reg [31:0] R5;
-	reg [31:0] R6;
-	reg [31:0] R7;
-	reg [31:0] R8;
-	reg [31:0] R9;
-	reg [31:0] R10;
-	reg [31:0] R11;
-	reg [31:0] R12;
-	reg [31:0] R13;
-	reg [31:0] R14;
-	reg [31:0] R15;
-	reg [31:0] R16;
-	reg [31:0] R17;
-	reg [31:0] R18;
-	reg [31:0] R19;
-	reg [31:0] R20;
-	reg [31:0] R21;
-	reg [31:0] R22;
-	reg [31:0] R23;
-	reg [31:0] R24;
-	reg [31:0] R25;
-	reg [31:0] R26;
-	reg [31:0] R27;
-	reg [31:0] R28;
-	reg [31:0] R29;
-	reg [31:0] R30;
-	reg [31:0] R31;
-
-	always @(posedge clk)
-	begin
-		if (we) 
-		begin
-   		case (wa[4:0])
-			5'd0:   ;
-			5'd1:   R1  <= wd;
-			5'd2:   R2  <= wd;
-			5'd3:   R3  <= wd;
-			5'd4:   R4  <= wd;
-			5'd5:   R5  <= wd;
-			5'd6:   R6  <= wd;
-			5'd7:   R7  <= wd;
-			5'd8:   R8  <= wd;
-			5'd9:   R9  <= wd;
-			5'd10:  R10 <= wd;
-			5'd11:  R11 <= wd;
-			5'd12:  R12 <= wd;
-			5'd13:  R13 <= wd;
-			5'd14:  R14 <= wd;
-			5'd15:  R15 <= wd;
-			5'd16:  R16 <= wd;
-			5'd17:  R17 <= wd;
-			5'd18:  R18 <= wd;
-			5'd19:  R19 <= wd;
-			5'd20:  R20 <= wd;
-			5'd21:  R21 <= wd;
-			5'd22:  R22 <= wd;
-			5'd23:  R23 <= wd;
-			5'd24:  R24 <= wd;
-			5'd25:  R25 <= wd;
-			5'd26:  R26 <= wd;
-			5'd27:  R27 <= wd;
-			5'd28:  R28 <= wd;
-			5'd29:  R29 <= wd;
-			5'd30:  R30 <= wd;
-			5'd31:  R31 <= wd;
-   		endcase
-		end
-	end
-
-	always @(*)
-	begin
-		case (ra2[4:0])
-		5'd0:   rd2 = 32'b0;
-		5'd1:   rd2 = R1;
-		5'd2:   rd2 = R2;
-		5'd3:   rd2 = R3;
-		5'd4:   rd2 = R4;
-		5'd5:   rd2 = R5;
-		5'd6:   rd2 = R6;
-		5'd7:   rd2 = R7;
-		5'd8:   rd2 = R8;
-		5'd9:   rd2 = R9;
-		5'd10:  rd2 = R10;
-		5'd11:  rd2 = R11;
-		5'd12:  rd2 = R12;
-		5'd13:  rd2 = R13;
-		5'd14:  rd2 = R14;
-		5'd15:  rd2 = R15;
-		5'd16:  rd2 = R16;
-		5'd17:  rd2 = R17;
-		5'd18:  rd2 = R18;
-		5'd19:  rd2 = R19;
-		5'd20:  rd2 = R20;
-		5'd21:  rd2 = R21;
-		5'd22:  rd2 = R22;
-		5'd23:  rd2 = R23;
-		5'd24:  rd2 = R24;
-		5'd25:  rd2 = R25;
-		5'd26:  rd2 = R26;
-		5'd27:  rd2 = R27;
-		5'd28:  rd2 = R28;
-		5'd29:  rd2 = R29;
-		5'd30:  rd2 = R30;
-		5'd31:  rd2 = R31;
-		endcase
-	end
-
-	always @(*)
-	begin
-		case (ra1[4:0])
-		5'd0:   rd1 = 32'b0;
-		5'd1:   rd1 = R1;
-		5'd2:   rd1 = R2;
-		5'd3:   rd1 = R3;
-		5'd4:   rd1 = R4;
-		5'd5:   rd1 = R5;
-		5'd6:   rd1 = R6;
-		5'd7:   rd1 = R7;
-		5'd8:   rd1 = R8;
-		5'd9:   rd1 = R9;
-		5'd10:  rd1 = R10;
-		5'd11:  rd1 = R11;
-		5'd12:  rd1 = R12;
-		5'd13:  rd1 = R13;
-		5'd14:  rd1 = R14;
-		5'd15:  rd1 = R15;
-		5'd16:  rd1 = R16;
-		5'd17:  rd1 = R17;
-		5'd18:  rd1 = R18;
-		5'd19:  rd1 = R19;
-		5'd20:  rd1 = R20;
-		5'd21:  rd1 = R21;
-		5'd22:  rd1 = R22;
-		5'd23:  rd1 = R23;
-		5'd24:  rd1 = R24;
-		5'd25:  rd1 = R25;
-		5'd26:  rd1 = R26;
-		5'd27:  rd1 = R27;
-		5'd28:  rd1 = R28;
-		5'd29:  rd1 = R29;
-		5'd30:  rd1 = R30;
-		5'd31:  rd1 = R31;
-		endcase
-	end
-endmodule
-//
-module registers(input         clk, 
-               input         regWrite, 
-               input  [4:0]  readReg1, readReg2, writeReg, 
-               input  [31:0] writeData, 
-               output [31:0] readData1, readData2);
-
+module registers(clk, regWrite, readReg1, readReg2, writeReg, writeData, readData1, readData2);
+	input clk;
+	input regWrite;
+	input  [4:0]  readReg1, readReg2, writeReg;
+	input  [31:0] writeData; 
+	output [31:0] readData1, readData2;
+	
 	reg [31:0] reg_mem[31:0];
 	assign readData1 = (readReg1 != 0) ? reg_mem[readReg1] : 0;
 	assign readData2 = (readReg2 != 0) ? reg_mem[readReg2] : 0;
 
 	initial
 	begin
-	reg_mem[0] = 0;
+	reg_mem[31]=0;
+	reg_mem[30]=0;
+	reg_mem[29]=0;
+	reg_mem[28]=0;
+	reg_mem[27]=0;
+	reg_mem[26]=0;
+	reg_mem[25]=0;
+	reg_mem[24]=0;
+	reg_mem[23]=0;
+	reg_mem[22]=0;
+	reg_mem[21]=0;
+	reg_mem[20]=0;
+	reg_mem[19]=0;
+	reg_mem[18]=0;
+	reg_mem[17]=0;
+	reg_mem[16]=0;
+	reg_mem[15]=0;
+	reg_mem[14]=0;
+	reg_mem[13]=0;
+	reg_mem[12]=0;
+	reg_mem[11]=0;
+	reg_mem[10]=0;
+	reg_mem[9]=0;
+	reg_mem[8]=0;
+	reg_mem[7]=0;
+	reg_mem[6]=0;
+	reg_mem[5]=0;
+	reg_mem[4]=0;
+	reg_mem[3]=0;
+	reg_mem[2]=0;
+	reg_mem[1]=0;
+	reg_mem[0]=0;
 	end
-	
 	always @(posedge clk)
-		if (regWrite) reg_mem[writeReg] <= writeData;
+		if (regWrite)if(writeReg) reg_mem[writeReg] <= writeData;
 endmodule
 //
 module shift_left_two(a, b);
