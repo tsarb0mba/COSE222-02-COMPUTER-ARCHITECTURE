@@ -29,7 +29,7 @@ begin
 		4'b1010: HEX5 = SegA;
 		4'b1011: HEX5 = SegB;
 		4'b1100: HEX5 = SegC;
-		4'b1101: HEX5= SegD;
+		4'b1101: HEX5 = SegD;
 		4'b1110: HEX5 = SegE;
 		4'b1111: HEX5 = SegF;
 	endcase
@@ -141,7 +141,7 @@ module clk_dll(rst, clk, out_clk);
   output out_clk;
 
   reg out_clk;
-  reg [23:0]cnt_clk;
+  reg [50:0]cnt_clk;
 
   always@(posedge clk or negedge rst) begin
     if(!rst) begin
@@ -153,8 +153,11 @@ module clk_dll(rst, clk, out_clk);
       cnt_clk <= cnt_clk+1;
             
      // if(cnt_clk == 24999999)
-      if(cnt_clk[23] == 1)
+      if(cnt_clk == 50)
         cnt_clk <=0;
+      else if(cnt_clk==0)
+        out_clk = !out_clk;     
+
     end
     
   end    
